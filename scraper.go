@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	// importing colly for web-scraping
+	// importing colly for web-scraping/crawling
 	"github.com/gocolly/colly"
 )
 
@@ -16,10 +16,25 @@ type Product struct {
 }
 
 func main() {
-	// scraping logic
 
+	// initializing the list of products to scrape with an empty slice
 	var products []Product
 
+	// initializing the list of pages to scrape with an empty slice
+	var pagesToScrape []string
+
+	// the first pagination URL to scrape
+	pageToScrape := "https://www.scrapingcourse.com/ecommerce/page/1/"
+
+	// initializing the list of pages discovered with a pageToScrape
+	pagesDiscovered := []string{pageToScrape}
+
+	// current iteration
+	i := 1
+	// max pages to scrape
+	limit := 5
+
+	// initializing a Colly instance
 	fmt.Println("Creating Collector")
 	c := colly.NewCollector()
 	c.OnRequest(func(r *colly.Request) {
@@ -27,11 +42,26 @@ func main() {
 	})
 
 	c.OnError(func(_ *colly.Response, err error) {
-		log.Println("Somehting went wrong: ", err)
+		log.Println("Something went wrong: ", err)
 	})
 
 	c.OnResponse(func(r *colly.Response) {
 		fmt.Println("Page visited: ", r.Request.URL)
+	})
+
+	// iterating over the list of pagination links to implement the crawling logic
+	c.OnHTML("a.page-numbers", func(e *colly.HTMLElement) {
+		// discovering a new page
+		newPaginationLink := e.Attr("href")
+
+		// if the discovered page is new
+		if !contains(pagesToScrape, newPaginationLink) {
+			// if the page discovered should be scraped
+			if !contains(pagesDiscovered, newPaginationLink) {
+				pagesToScrape = append(pagesToScrape, newPaginationLink)
+			}
+			pagesDiscovered = append(pagesDiscovered, newPaginationLink)
+		}
 	})
 
 	// iterating over the list of HTML product elements
@@ -51,6 +81,19 @@ func main() {
 
 	c.OnScraped(func(r *colly.Response) {
 		fmt.Println(r.Request.URL, " scraped!")
+
+		// until there is still a page to scrape
+		if len(pagesToScrape) != 0 && i < limit {
+			// getting the current page to scrape and removing it from the list
+			pageToScrape := pagesToScrape[0]
+			pagesToScrape = pagesToScrape[1:]
+
+			// incrementing the iteration count
+			i++
+
+			// visiting a new page
+			c.Visit(pageToScrape)
+		}
 
 		// opening the CSV file
 		file, err := os.Create("Products.csv")
@@ -90,4 +133,14 @@ func main() {
 
 	c.Visit("https://www.scrapingcourse.com/ecommerce/")
 	fmt.Println("Hello World!")
+}
+
+// contains checks if a slice contains a specific element
+func contains(slice []string, element string) bool {
+	for _, item := range slice {
+		if item == element {
+			return true
+		}
+	}
+	return false
 }
